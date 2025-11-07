@@ -1,6 +1,7 @@
-node_modules
+node_modules/
 .env
-config/serviceAccountKey.json
-docs/
-services
+*.log
+taskschedulerproject-15f1b-firebase-adminsdk-fbsvc-c8a71878fe.json
+Docs/
+services/
 TaiLieu_BaoCao/
