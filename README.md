@@ -205,10 +205,6 @@ Nếu gặp vấn đề:
 - Check token format: `Bearer <token>`
 - Check .env file có đúng không
 
-## License
-
-ISC
-
 ## Author
 
 NguyenThuan_NAUTH - 23CT113
