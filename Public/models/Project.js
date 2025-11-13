@@ -10,8 +10,12 @@ class Project {
     this.ProjectDescription = data.ProjectDescription;
     this.StartDate = data.StartDate;
     this.EndDate = data.EndDate;
-    this.Status = data.Status || 'In Progress';
+    this.Status = data.Status || 'Planning';
     this.OwnerUserID = data.OwnerUserID;
+  }
+
+  static getValidStatuses() {
+    return ['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled'];
   }
 
   async save() {

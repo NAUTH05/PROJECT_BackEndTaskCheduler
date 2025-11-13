@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 import User from './models/User.js';
 
 const router = Router();
@@ -125,6 +126,74 @@ router.post('/login', async (req, res) => {
     } catch (error) {
         res.status(500).json({
             message: 'Lỗi server',
+            error: error.message
+        });
+    }
+});
+
+// Search users by email or username
+router.get('/users/search', authenticateToken, async (req, res) => {
+    try {
+        const { query, q } = req.query;
+        const searchQuery = query || q;
+
+        if (!searchQuery || searchQuery.trim() === '') {
+            return res.status(400).json({
+                message: 'Search query is required'
+            });
+        }
+
+        // Get all users and filter in memory (since Firestore doesn't support case-insensitive search)
+        const allUsers = await User.find();
+
+        const searchLower = searchQuery.toLowerCase();
+        const filteredUsers = allUsers.filter(user => {
+            const userName = (user.userName || '').toLowerCase();
+            const email = (user.email || '').toLowerCase();
+
+            return userName.includes(searchLower) || email.includes(searchLower);
+        });
+
+        // Return user info without password
+        const results = filteredUsers.map(user => ({
+            userId: user._id,
+            userName: user.userName,
+            email: user.email
+        }));
+
+        res.status(200).json({
+            message: 'Search completed',
+            count: results.length,
+            data: results
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Error searching users',
+            error: error.message
+        });
+    }
+});
+
+// Get all users (for dropdown selection)
+router.get('/users', authenticateToken, async (req, res) => {
+    try {
+        const users = await User.find();
+
+        // Return user info without password
+        const results = users.map(user => ({
+            userId: user._id,
+            userName: user.userName,
+            email: user.email
+        }));
+
+        res.status(200).json({
+            message: 'Retrieved all users',
+            count: results.length,
+            data: results
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Error retrieving users',
             error: error.message
         });
     }

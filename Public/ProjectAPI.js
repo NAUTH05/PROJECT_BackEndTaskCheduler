@@ -44,10 +44,10 @@ router.post('/projects', authenticateToken, async (req, res) => {
             }
         }
 
-        const validStatuses = ['In Progress', 'Completed', 'To Do'];
+        const validStatuses = Project.getValidStatuses();
         if (Status && !validStatuses.includes(Status)) {
             return res.status(400).json({
-                message: 'Status không hợp lệ'
+                message: `Status không hợp lệ. Chỉ chấp nhận: ${validStatuses.join(', ')}`
             });
         }
 
@@ -59,7 +59,7 @@ router.post('/projects', authenticateToken, async (req, res) => {
             ProjectDescription,
             StartDate,
             EndDate,
-            Status: Status || 'In Progress',
+            Status: Status || 'Planning',
             OwnerUserID
         });
 
@@ -167,10 +167,10 @@ router.put('/projects/:id', authenticateToken, async (req, res) => {
         }
 
         if (updateData.Status) {
-            const validStatuses = ['In Progress', 'Completed', 'To Do'];
+            const validStatuses = Project.getValidStatuses();
             if (!validStatuses.includes(updateData.Status)) {
                 return res.status(400).json({
-                    message: 'Status không hợp lệ'
+                    message: `Status không hợp lệ. Chỉ chấp nhận: ${validStatuses.join(', ')}`
                 });
             }
         }

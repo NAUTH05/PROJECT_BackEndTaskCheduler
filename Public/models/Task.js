@@ -11,8 +11,16 @@ class Task {
     this.TaskDescription = data.TaskDescription;
     this.DueDate = data.DueDate;
     this.Priority = data.Priority || 'Medium';
-    this.Status = data.Status || 'To Do';
+    this.Status = data.Status || 'Backlog';
     this.AssignedToUserID = data.AssignedToUserID || null;
+  }
+
+  static getValidStatuses() {
+    return ['Backlog', 'To Do', 'In Progress', 'In Review', 'Testing', 'Blocked', 'Completed', 'Cancelled'];
+  }
+
+  static getValidPriorities() {
+    return ['Low', 'Medium', 'High', 'Urgent'];
   }
 
   async save() {
