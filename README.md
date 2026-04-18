@@ -196,6 +196,10 @@ Login → Get Token → Create Task → Assign to User → Update Status → Com
    - Gán công việc
 4. Source code C# đầy đủ tại repository
 
+### Deployed Web
+
+**Web đã deploy tại**: [https://hrm.fit.pro.vn/](https://hrm.fit.pro.vn/)
+
 ### Status code
 
 1. 2xx - Success (Thành công)
@@ -209,7 +213,9 @@ Login → Get Token → Create Task → Assign to User → Update Status → Com
    - 404 Not Found: Không tìm thấy resource (user, project, task)
 3. 5xx - Server Error (Lỗi server)
    - 500 Internal Server Error: Lỗi server không mong đợi
+## E-portfolio
 
+**Portfolio dự án**: [https://fit.pro.vn/](https://fit.pro.vn/)
 ## Support
 
 Nếu gặp vấn đề:
