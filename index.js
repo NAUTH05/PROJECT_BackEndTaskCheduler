@@ -10,8 +10,15 @@ import taskRoutes from './Public/TaskAPI.js';
 import userRoutes from './Public/userAPI.js';
 dotenv.config();
 const app = express();
-const port = process.env.PORT || 3300;
-app.use(cors());
+const port = process.env.PORT || 5128;
+app.use(cors({
+    origin: [
+        'https://hrm.fit.pro.vn',
+        'http://localhost:5173',
+        'http://localhost:5127',
+    ],
+    credentials: true,
+}));
 app.use((req, res, next) => {
     if (req.method === 'PUT' && (!req.headers['content-length'] || req.headers['content-length'] === '0')) {
         req.headers['content-type'] = 'text/plain';

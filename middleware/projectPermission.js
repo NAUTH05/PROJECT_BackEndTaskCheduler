@@ -39,7 +39,16 @@ export const checkProjectMember = async (req, res, next) => {
       UserID: req.user.userId
     });
     if (!member) {
-      return res.status(403).json({ message: 'You are not a member of this project' });
+      // Also allow users assigned to any task in this project
+      const Task = (await import('../Public/models/Task.js')).default;
+      const assignedTask = await Task.findOne({ ProjectID: projectId, AssignedToUserID: req.user.userId });
+      if (!assignedTask) {
+        return res.status(403).json({ message: 'You are not a member of this project' });
+      }
+      req.project = project;
+      req.isOwner = false;
+      req.isAssigned = true;
+      return next();
     }
     req.project = project;
     req.memberRole = member.Role;

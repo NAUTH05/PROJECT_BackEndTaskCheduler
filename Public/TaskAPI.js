@@ -23,6 +23,11 @@ router.post('/tasks', authenticateToken, async (req, res) => {
                 message: 'Không tìm thấy project'
             });
         }
+        if (project.OwnerUserID !== req.user.userId) {
+            return res.status(403).json({
+                message: 'Chỉ owner mới có thể tạo task'
+            });
+        }
         if (AssignedToUserID) {
             const user = await User.findById(AssignedToUserID);
             if (!user) {
@@ -36,6 +41,15 @@ router.post('/tasks', authenticateToken, async (req, res) => {
             return res.status(400).json({
                 message: 'Ngày không hợp lệ'
             });
+        }
+        // DueDate must be >= project StartDate
+        if (project.StartDate) {
+            const projectStart = new Date(project.StartDate);
+            if (!isNaN(projectStart.getTime()) && dueDate < projectStart) {
+                return res.status(400).json({
+                    message: `Hạn chót phải từ ngày ${new Date(project.StartDate).toLocaleDateString('vi-VN')} trở đi (ngày bắt đầu dự án)`
+                });
+            }
         }
         const validPriorities = Task.getValidPriorities();
         if (Priority && !validPriorities.includes(Priority)) {
@@ -98,13 +112,52 @@ router.post('/tasks', authenticateToken, async (req, res) => {
 });
 router.get('/tasks', authenticateToken, async (req, res) => {
     try {
-        const { ProjectID, AssignedToUserID, Status, Priority } = req.query;
-        const query = {};
-        if (ProjectID) query.ProjectID = ProjectID;
-        if (AssignedToUserID) query.AssignedToUserID = AssignedToUserID;
-        if (Status) query.Status = Status;
-        if (Priority) query.Priority = Priority;
-        const tasks = await Task.find(query);
+        const { ProjectID, Status, Priority } = req.query;
+        const userId = req.user.userId;
+        // Determine accessible project IDs for this user
+        const [ownedProjects, memberships, assignedTasks] = await Promise.all([
+            Project.find({ OwnerUserID: userId }),
+            ProjectMember.find({ UserID: userId }),
+            Task.find({ AssignedToUserID: userId }),
+        ]);
+        const accessibleProjectIds = new Set([
+            ...ownedProjects.map(p => p.ProjectID),
+            ...memberships.map(m => m.ProjectID),
+            ...assignedTasks.map(t => t.ProjectID),
+        ]);
+        // If a specific project is requested, verify access
+        if (ProjectID) {
+            if (!accessibleProjectIds.has(ProjectID)) {
+                return res.status(403).json({ message: 'Bạn không có quyền xem project này' });
+            }
+            const query = { ProjectID };
+            if (Status) query.Status = Status;
+            if (Priority) query.Priority = Priority;
+            var tasks = await Task.find(query);
+        } else {
+            if (accessibleProjectIds.size === 0) {
+                return res.status(200).json({ message: 'Lấy danh sách thành công', count: 0, taskIds: [], data: [] });
+            }
+            const taskArrays = await Promise.all(
+                [...accessibleProjectIds].map(pid => {
+                    const q = { ProjectID: pid };
+                    if (Status) q.Status = Status;
+                    if (Priority) q.Priority = Priority;
+                    return Task.find(q);
+                })
+            );
+            const seen = new Set();
+            var tasks = taskArrays.flat().filter(t => {
+                if (seen.has(t.TaskID)) return false;
+                seen.add(t.TaskID);
+                return true;
+            });
+            tasks.sort((a, b) => {
+                const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+                const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+                return dateB - dateA;
+            });
+        }
         const tasksWithUserDetails = await Promise.all(
             tasks.map(async (task) => {
                 let assignedUserDetails = null;
@@ -236,6 +289,23 @@ router.put('/tasks/:id', authenticateToken, async (req, res) => {
                 message: 'Không tìm thấy task'
             });
         }
+        // Permission check
+        const taskProject = await Project.findById(existingTask.ProjectID);
+        const isTaskOwner = taskProject?.OwnerUserID === req.user.userId;
+        const isAssignedUser = existingTask.AssignedToUserID === req.user.userId;
+        const membership = await ProjectMember.findOne({ ProjectID: existingTask.ProjectID, UserID: req.user.userId });
+        const isMember = !!membership;
+        if (!isTaskOwner && !isMember && !isAssignedUser) {
+            return res.status(403).json({ message: 'Bạn không có quyền sửa task này' });
+        }
+        // Assigned-only users can only update Status
+        if (!isTaskOwner && !isMember && isAssignedUser) {
+            const allowed = ['Status'];
+            const forbidden = Object.keys(updateData).filter(k => !allowed.includes(k));
+            if (forbidden.length > 0) {
+                return res.status(403).json({ message: 'Bạn chỉ có thể cập nhật trạng thái task' });
+            }
+        }
         if (updateData.DueDate) {
             const dueDate = new Date(updateData.DueDate);
             if (isNaN(dueDate.getTime())) {
@@ -312,6 +382,10 @@ router.delete('/tasks/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({
                 message: 'Không tìm thấy task'
             });
+        }
+        const delProject = await Project.findById(existingTask.ProjectID);
+        if (delProject?.OwnerUserID !== req.user.userId) {
+            return res.status(403).json({ message: 'Chỉ owner mới có thể xóa task' });
         }
         await Task.findByIdAndDelete(id);
         res.status(200).json({

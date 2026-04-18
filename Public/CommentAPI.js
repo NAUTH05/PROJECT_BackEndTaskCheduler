@@ -76,9 +76,10 @@ router.post('/tasks/:id/comments', authenticateToken, async (req, res) => {
       ProjectID: task.ProjectID,
       UserID: userId
     });
-    if (!isOwner && !membership) {
+    const isAssigned = task.AssignedToUserID === userId;
+    if (!isOwner && !membership && !isAssigned) {
       return res.status(403).json({
-        message: 'You must be the owner or a member of the project to comment on tasks'
+        message: 'You must be the owner, a member, or assigned to this task to comment'
       });
     }
     const newComment = new Comment({
@@ -171,9 +172,10 @@ router.get('/tasks/:id/comments', authenticateToken, async (req, res) => {
       ProjectID: task.ProjectID,
       UserID: userId
     });
-    if (!isOwner && !membership) {
+    const isAssigned = task.AssignedToUserID === userId;
+    if (!isOwner && !membership && !isAssigned) {
       return res.status(403).json({
-        message: 'You must be the owner or a member of the project to view task comments'
+        message: 'You must be the owner, a member, or assigned to this task to view comments'
       });
     }
     const comments = await Comment.find({ TaskID: taskId });

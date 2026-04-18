@@ -3,16 +3,19 @@ import { db } from '../../config/firebase.js';
 class Notification {
   constructor(data) {
     this.NotificationID = data.NotificationID || nanoid(8);
-    this.Type = data.Type; 
+    this.Type = data.Type;
     this.Title = data.Title;
     this.Message = data.Message;
     this.IsRead = data.IsRead || false;
     this.CreatedAt = data.CreatedAt || new Date().toISOString();
-    this.RecipientUserID = data.RecipientUserID; 
-    this.RelatedEntityID = data.RelatedEntityID || null; 
-    this.RelatedEntityType = data.RelatedEntityType || null; 
-    this.ActionByUserID = data.ActionByUserID || null; 
+    this.RecipientUserID = data.RecipientUserID;
+    this.RelatedEntityID = data.RelatedEntityID || null;
+    this.RelatedEntityType = data.RelatedEntityType || null;
+    this.ActionByUserID = data.ActionByUserID || null;
     this.ActionByUserName = data.ActionByUserName || null;
+    // For invite-type notifications (PROJECT_SHARED)
+    this.ActionRequired = data.ActionRequired || false;
+    this.Status = data.Status || 'pending'; // 'pending' | 'accepted' | 'declined'
   }
   async save() {
     const notificationRef = db.collection('Notifications').doc(this.NotificationID);
@@ -27,7 +30,9 @@ class Notification {
       RelatedEntityID: this.RelatedEntityID,
       RelatedEntityType: this.RelatedEntityType,
       ActionByUserID: this.ActionByUserID,
-      ActionByUserName: this.ActionByUserName
+      ActionByUserName: this.ActionByUserName,
+      ActionRequired: this.ActionRequired,
+      Status: this.Status
     });
     return this;
   }

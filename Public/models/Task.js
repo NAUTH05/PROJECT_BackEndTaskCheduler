@@ -16,7 +16,7 @@ class Task {
     return ['Backlog', 'To Do', 'In Progress', 'In Review', 'Testing', 'Blocked', 'Completed', 'Cancelled'];
   }
   static getValidPriorities() {
-    return ['Low', 'Medium', 'High', 'Urgent'];
+    return ['Low', 'Medium', 'High', 'Critical'];
   }
   async save() {
     const taskData = {

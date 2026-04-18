@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { checkProjectMember, checkProjectOwner } from '../middleware/projectPermission.js';
+import { notifyProjectShared } from '../services/NotificationHelper.js';
 import Project from './models/Project.js';
 import ProjectMember from './models/ProjectMember.js';
 import User from './models/User.js';
@@ -33,6 +34,9 @@ router.post('/projects/:id/members', authenticateToken, checkProjectOwner, async
       Role: 'member'
     });
     await newMember.save();
+    // Send notification to the added user
+    const addedByUser = await User.findById(req.user.userId);
+    await notifyProjectShared(req.project, user, addedByUser || { userName: 'Owner', _id: req.user.userId });
     res.status(201).json({
       message: 'Member added successfully',
       member: {
