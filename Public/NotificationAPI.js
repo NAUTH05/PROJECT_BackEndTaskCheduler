@@ -1,6 +1,9 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { logActivity, LogActions } from '../services/ActivityLogHelper.js';
+import { emitToUser } from '../services/socketManager.js';
 import Notification from './models/Notification.js';
+import Project from './models/Project.js';
 import ProjectMember from './models/ProjectMember.js';
 const router = express.Router();
 router.get('/notifications', authenticateToken, async (req, res) => {
@@ -169,6 +172,24 @@ router.post('/notifications/:id/respond', authenticateToken, async (req, res) =>
         UserID: userId
       });
     }
+
+    // ── Emit invite_status_changed to project owner (real-time) ──
+    const project = await Project.findById(notification.RelatedEntityID);
+    if (project) {
+      emitToUser(project.OwnerUserID, 'invite_status_changed', {
+        projectId: notification.RelatedEntityID,
+        userId: userId,
+        userName: req.user.userName || '',
+        action: action,
+      });
+      // Log activity
+      const actionType = action === 'accept' ? LogActions.MEMBER_ACCEPTED : LogActions.MEMBER_DECLINED;
+      const details = action === 'accept'
+        ? `${req.user.userName || userId} đã chấp nhận lời mời tham gia dự án`
+        : `${req.user.userName || userId} đã từ chối lời mời tham gia dự án`;
+      logActivity(notification.RelatedEntityID, userId, req.user.userName || '', actionType, details, 'member', userId);
+    }
+
     res.status(200).json({
       message: action === 'accept' ? 'Đã chấp nhận lời mời' : 'Đã từ chối lời mời',
       action,

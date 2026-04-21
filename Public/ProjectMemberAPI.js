@@ -1,7 +1,10 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { checkProjectMember, checkProjectOwner } from '../middleware/projectPermission.js';
-import { notifyProjectShared } from '../services/NotificationHelper.js';
+import { logActivity, LogActions } from '../services/ActivityLogHelper.js';
+import { createNotification, notifyProjectShared, NotificationTypes } from '../services/NotificationHelper.js';
+import { emitToUser } from '../services/socketManager.js';
+import Notification from './models/Notification.js';
 import Project from './models/Project.js';
 import ProjectMember from './models/ProjectMember.js';
 import User from './models/User.js';
@@ -37,6 +40,9 @@ router.post('/projects/:id/members', authenticateToken, checkProjectOwner, async
     // Send notification to the added user
     const addedByUser = await User.findById(req.user.userId);
     await notifyProjectShared(req.project, user, addedByUser || { userName: 'Owner', _id: req.user.userId });
+    // Log activity
+    logActivity(projectId, req.user.userId, addedByUser?.userName || 'Owner', LogActions.MEMBER_ADDED,
+      `${addedByUser?.userName || 'Owner'} đã thêm ${user.userName} vào dự án`, 'member', targetUserId);
     res.status(201).json({
       message: 'Member added successfully',
       member: {
@@ -67,6 +73,27 @@ router.delete('/projects/:id/members/:userId', authenticateToken, checkProjectOw
     if (!member) {
       return res.status(404).json({ message: 'Member not found in this project' });
     }
+    // Log activity — member removed
+    const removedUser = await User.findById(userId);
+    const ownerUser = await User.findById(req.user.userId);
+    logActivity(projectId, req.user.userId, ownerUser?.userName || 'Owner', LogActions.MEMBER_REMOVED,
+      `${ownerUser?.userName || 'Owner'} đã xóa ${removedUser?.userName || userId} khỏi dự án`, 'member', userId);
+
+    // Notify the removed user
+    const projectName = req.project?.ProjectName || 'Dự án';
+    await createNotification(
+      userId,
+      NotificationTypes.PROJECT_SHARED,
+      '❌ Bị xóa khỏi dự án',
+      `${ownerUser?.userName || 'Owner'} đã xóa bạn khỏi dự án "${projectName}"`,
+      {
+        relatedEntityId: projectId,
+        relatedEntityType: 'project',
+        actionByUserId: req.user.userId,
+        actionByUserName: ownerUser?.userName || 'Owner',
+      }
+    );
+
     res.status(200).json({
       message: 'Member removed successfully',
       removedMember: member
@@ -82,13 +109,22 @@ router.get('/projects/:id/members', authenticateToken, checkProjectMember, async
     const membersWithDetails = await Promise.all(
       members.map(async (member) => {
         const user = await User.findById(member.UserID);
+        // Look up invite status from PROJECT_SHARED notification
+        const notifications = await Notification.find({
+          RecipientUserID: member.UserID,
+          RelatedEntityID: projectId,
+          Type: 'PROJECT_SHARED'
+        });
+        const inviteNotif = notifications[0];
+        const inviteStatus = inviteNotif?.Status || 'accepted'; // default accepted if no notification found
         return {
           MemberID: member.MemberID,
           UserID: member.UserID,
           UserName: user?.userName || 'Unknown',
           Email: user?.email || 'Unknown',
           Role: member.Role,
-          JoinedAt: member.JoinedAt
+          JoinedAt: member.JoinedAt,
+          InviteStatus: inviteStatus,
         };
       })
     );

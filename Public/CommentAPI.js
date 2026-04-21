@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { checkCommentOwner } from '../middleware/commentPermission.js';
 import { checkProjectAccess } from '../middleware/projectPermission.js';
+import { logActivity, LogActions } from '../services/ActivityLogHelper.js';
 import Comment from './models/Comment.js';
 import Project from './models/Project.js';
 import Task from './models/Task.js';
@@ -29,6 +30,9 @@ router.post('/projects/:id/comments', authenticateToken, checkProjectAccess, asy
     });
     await newComment.save();
     const user = await User.findById(userId);
+    // Log activity
+    logActivity(projectId, userId, user?.userName || '', LogActions.COMMENT_ADDED,
+      `Đã bình luận: "${commentContent.substring(0, 50)}${commentContent.length > 50 ? '...' : ''}"`, 'comment', newComment.CommentID);
     res.status(201).json({
       message: 'Comment added successfully',
       data: {
@@ -90,6 +94,9 @@ router.post('/tasks/:id/comments', authenticateToken, async (req, res) => {
     });
     await newComment.save();
     const user = await User.findById(userId);
+    // Log activity for task comment
+    logActivity(task.ProjectID, userId, user?.userName || '', LogActions.COMMENT_ADDED,
+      `Đã bình luận trên task "${task.TaskName}": "${commentContent.substring(0, 50)}${commentContent.length > 50 ? '...' : ''}"`, 'comment', newComment.CommentID);
     res.status(201).json({
       message: 'Comment added successfully',
       data: {
@@ -250,7 +257,23 @@ router.put('/comments/:id', authenticateToken, checkCommentOwner, async (req, re
 router.delete('/comments/:id', authenticateToken, checkCommentOwner, async (req, res) => {
   try {
     const commentId = req.params.id;
+    // Fetch comment before delete for logging
+    const comment = await Comment.findById(commentId);
     await Comment.findByIdAndDelete(commentId);
+    // Log activity
+    if (comment) {
+      const projectId = comment.ProjectID || null;
+      if (!projectId && comment.TaskID) {
+        const task = await Task.findById(comment.TaskID);
+        if (task) {
+          logActivity(task.ProjectID, req.user.userId, req.user.userName || '', LogActions.COMMENT_DELETED,
+            `Đã xóa bình luận trên task`, 'comment', commentId);
+        }
+      } else if (projectId) {
+        logActivity(projectId, req.user.userId, req.user.userName || '', LogActions.COMMENT_DELETED,
+          `Đã xóa bình luận`, 'comment', commentId);
+      }
+    }
     res.status(200).json({
       message: 'Comment deleted successfully',
       data: {

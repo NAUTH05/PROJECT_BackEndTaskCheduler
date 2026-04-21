@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { checkTaskAccess } from '../middleware/taskPermission.js';
+import { logActivity, LogActions } from '../services/ActivityLogHelper.js';
 import { notifyTaskAssignment, notifyTaskUnassignment } from '../services/NotificationHelper.js';
 import Project from './models/Project.js';
 import ProjectMember from './models/ProjectMember.js';
@@ -86,6 +87,9 @@ router.post('/tasks', authenticateToken, async (req, res) => {
                 };
             }
         }
+        // Log activity
+        logActivity(ProjectID, req.user.userId, req.user.userName || '', LogActions.TASK_CREATED,
+          `Đã tạo task "${TaskName}"`, 'task', newTask.TaskID);
         res.status(201).json({
             message: 'Tạo task thành công',
             taskId: newTask.TaskID,
@@ -341,6 +345,14 @@ router.put('/tasks/:id', authenticateToken, async (req, res) => {
         delete updateData.TaskID;
         delete updateData.ProjectID;
         const updatedTask = await Task.findByIdAndUpdate(id, updateData, { new: true });
+        // Log activity
+        if (updateData.Status && updateData.Status !== existingTask.Status) {
+          logActivity(existingTask.ProjectID, req.user.userId, req.user.userName || '', LogActions.TASK_STATUS_CHANGED,
+            `Đã thay đổi trạng thái task "${existingTask.TaskName}" từ "${existingTask.Status}" sang "${updateData.Status}"`, 'task', id);
+        } else {
+          logActivity(existingTask.ProjectID, req.user.userId, req.user.userName || '', LogActions.TASK_UPDATED,
+            `Đã cập nhật task "${existingTask.TaskName}"`, 'task', id);
+        }
         let assignedUserDetails = null;
         if (updatedTask.AssignedToUserID) {
             const assignedUser = await User.findById(updatedTask.AssignedToUserID);
@@ -388,6 +400,9 @@ router.delete('/tasks/:id', authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Chỉ owner mới có thể xóa task' });
         }
         await Task.findByIdAndDelete(id);
+        // Log activity
+        logActivity(existingTask.ProjectID, req.user.userId, req.user.userName || '', LogActions.TASK_DELETED,
+          `Đã xóa task "${existingTask.TaskName}"`, 'task', id);
         res.status(200).json({
             message: 'Xóa thành công',
             taskId: id,
@@ -451,6 +466,9 @@ router.put('/tasks/:id/assign', authenticateToken, checkTaskAccess, async (req, 
         }
         const assignedBy = await User.findById(req.user.userId);
         await notifyTaskAssignment(updatedTask, user, assignedBy);
+        // Log activity
+        logActivity(req.task.ProjectID, req.user.userId, assignedBy?.userName || '', LogActions.TASK_ASSIGNED,
+          `${assignedBy?.userName || 'Owner'} đã giao task "${updatedTask.TaskName}" cho ${user.userName || user.email}`, 'task', taskId);
         res.status(200).json({
             message: 'Task assigned successfully',
             data: {
@@ -491,6 +509,10 @@ router.put('/tasks/:id/unassign', authenticateToken, checkTaskAccess, async (req
         await TaskAssignment.deleteMany({ TaskID: taskId });
         const unassignedBy = await User.findById(req.user.userId);
         await notifyTaskUnassignment(updatedTask, previousAssignedUserId, unassignedBy);
+        // Log activity
+        const prevUser = await User.findById(previousAssignedUserId);
+        logActivity(req.task.ProjectID, req.user.userId, unassignedBy?.userName || '', LogActions.TASK_UNASSIGNED,
+          `${unassignedBy?.userName || 'Owner'} đã hủy giao task "${updatedTask.TaskName}" từ ${prevUser?.userName || previousAssignedUserId}`, 'task', taskId);
         res.status(200).json({
             message: 'Task unassigned successfully',
             data: {
