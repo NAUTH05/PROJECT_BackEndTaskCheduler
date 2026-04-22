@@ -18,6 +18,7 @@ const app = express();
 const port = process.env.PORT || 5128;
 
 const allowedOrigins = [
+    'https://task.fit.pro.vn',
     'https://hrm.fit.pro.vn',
     'http://localhost:5173',
     'http://localhost:5127',
